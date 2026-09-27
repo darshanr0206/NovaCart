@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+*/node_modules/
+*/*/node_modules/
+
+# Production builds
+.next/
+*/.next/
+target/
+*/target/
+dist/
+*/dist/
+.vite/
+*/.vite/
+*.class
+
+# Environment files and secrets
+.env
+.env.*
+*.env
+*/.env
+*/.env.*
+*/*/.env
+!**/.env.example
+
+# OS and Editor
+.DS_Store
+Thumbs.db
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Scratch & Archives
+*.zip
+*.tar.gz
+scratch/extracted_archives/
+download_server/
