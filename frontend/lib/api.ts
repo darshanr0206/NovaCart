@@ -1,6 +1,9 @@
 import axios from "axios";
 
-const getInitialBaseUrl = () => {
+const getApiBaseUrl = () => {
+  if (process.env.NEXT_PUBLIC_API_BASE_URL) {
+    return process.env.NEXT_PUBLIC_API_BASE_URL;
+  }
   if (typeof window !== "undefined") {
     return `http://${window.location.hostname}:8080/api`;
   }
@@ -8,23 +11,18 @@ const getInitialBaseUrl = () => {
 };
 
 export const api = axios.create({
-  baseURL: getInitialBaseUrl(),
+  baseURL: getApiBaseUrl(),
   headers: { "Content-Type": "application/json" },
 });
 
-// Attach the JWT access token and ensure dynamic baseURL matches current host
+// Attach the JWT access token and ensure dynamic baseURL matches configured API or current host
 api.interceptors.request.use((config) => {
+  config.baseURL = getApiBaseUrl();
   if (typeof window !== "undefined") {
-    const host = window.location.hostname;
-    if (host) {
-      config.baseURL = `http://${host}:8080/api`;
-    }
     const token = localStorage.getItem("novacart_access_token");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-  } else {
-    config.baseURL = process.env.INTERNAL_API_URL || "http://127.0.0.1:8080/api";
   }
   return config;
 });
@@ -108,11 +106,8 @@ api.interceptors.response.use(
       originalRequest._retry = true;
       isRefreshing = true;
 
-      // Use the dynamic host (same as request interceptor) so IP-based access works correctly
-      const refreshBaseUrl =
-        typeof window !== "undefined"
-          ? `http://${window.location.hostname}:8080/api`
-          : process.env.INTERNAL_API_URL || "http://127.0.0.1:8080/api";
+      // Use the configured API base URL or fallback
+      const refreshBaseUrl = getApiBaseUrl();
 
       try {
         const { data } = await axios.post(`${refreshBaseUrl}/auth/refresh`, { refreshToken });
