@@ -16,6 +16,7 @@ import Customers from './pages/Customers'
 import CustomerDetails from './pages/CustomerDetails'
 import Payments from './pages/Payments'
 import Returns from './pages/Returns'
+import Coupons from './pages/Coupons'
 import Analytics from './pages/Analytics'
 import Settings from './pages/Settings'
 
@@ -101,6 +102,7 @@ export default function App() {
         <Route path="customers/:id" element={<CustomerDetails />} />
         <Route path="payments" element={<Payments />} />
         <Route path="returns" element={<Returns />} />
+        <Route path="coupons" element={<Coupons />} />
         <Route path="analytics" element={<Analytics />} />
         <Route path="settings" element={<Settings />} />
 

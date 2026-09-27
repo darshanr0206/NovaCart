@@ -17,8 +17,16 @@ public class Coupon {
     @Column(nullable = false, unique = true)
     private String code;
 
-    @Column(nullable = false, precision = 5, scale = 2)
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    @Builder.Default
+    private DiscountType discountType = DiscountType.PERCENTAGE;
+
+    @Column(precision = 5, scale = 2)
     private BigDecimal discountPercent;
+
+    @Column(precision = 12, scale = 2)
+    private BigDecimal fixedDiscountAmount;
 
     @Column(precision = 12, scale = 2)
     private BigDecimal minOrderValue;
@@ -26,9 +34,16 @@ public class Coupon {
     @Column(precision = 12, scale = 2)
     private BigDecimal maxDiscountAmount;
 
+    private Integer usageLimit;
+
+    @Builder.Default
+    private Integer usageCount = 0;
+
     @Column(nullable = false)
     private LocalDateTime expiryDate;
 
     @Builder.Default
     private boolean active = true;
+
+    public enum DiscountType { PERCENTAGE, FIXED }
 }

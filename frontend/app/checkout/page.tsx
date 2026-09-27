@@ -17,6 +17,7 @@ import {
 import { formatINR } from "@/lib/utils";
 import { getApiErrorMessage } from "@/lib/api";
 import { Address } from "@/types";
+import { validateCoupon, CouponValidateResult } from "@/services/coupon-service";
 import { toast } from "sonner";
 import Link from "next/link";
 import {
@@ -31,6 +32,7 @@ import {
   Building,
   QrCode,
   Zap,
+  Tag,
   AlertCircle,
   HelpCircle,
   RotateCcw,
@@ -113,6 +115,42 @@ export default function CheckoutPage() {
   const [timeLeft, setTimeLeft] = useState(264); // 04:24 minutes matching screenshot!
   const [giftCardCode, setGiftCardCode] = useState("");
   const [giftCardPin, setGiftCardPin] = useState("");
+
+  // Coupon state
+  const [couponInput, setCouponInput] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<CouponValidateResult | null>(null);
+  const [validatingCoupon, setValidatingCoupon] = useState(false);
+
+  async function handleApplyCoupon() {
+    if (!couponInput.trim()) {
+      toast.error("Please enter a coupon code");
+      return;
+    }
+    if (!cart?.total) {
+      toast.error("Cart is empty");
+      return;
+    }
+    setValidatingCoupon(true);
+    try {
+      const res = await validateCoupon(couponInput.trim(), cart.total);
+      if (res.valid) {
+        setAppliedCoupon(res);
+        toast.success(res.message || "Coupon applied successfully!");
+      } else {
+        toast.error(res.message || "Invalid coupon");
+      }
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Invalid coupon code");
+    } finally {
+      setValidatingCoupon(false);
+    }
+  }
+
+  function handleRemoveCoupon() {
+    setAppliedCoupon(null);
+    setCouponInput("");
+    toast.info("Coupon removed");
+  }
 
   // Countdown timer
   useEffect(() => {
@@ -360,7 +398,7 @@ export default function CheckoutPage() {
     if (selectedMethod === "COD") {
       setPlacing(true);
       try {
-        const order = await createOrder(selectedAddressId, undefined, "COD");
+        const order = await createOrder(selectedAddressId, appliedCoupon?.code || undefined, "COD");
         clearCart();
         toast.success("Order placed with Cash on Delivery! 📦");
         router.push(`/orders/${order.id}`);
@@ -380,7 +418,7 @@ export default function CheckoutPage() {
     try {
       let order = activeOrder;
       if (!order) {
-        order = await createOrder(selectedAddressId, undefined, "RAZORPAY");
+        order = await createOrder(selectedAddressId, appliedCoupon?.code || undefined, "RAZORPAY");
         setActiveOrder(order);
       }
 
@@ -518,9 +556,10 @@ export default function CheckoutPage() {
   }
 
   // Calculations for Price Summary
-  const totalAmount = cart.total;
-  const estimatedMrp = Math.round(totalAmount * 1.142);
-  const discountAmount = estimatedMrp - totalAmount;
+  const couponDiscount = appliedCoupon ? appliedCoupon.discountAmount : 0;
+  const totalAmount = Math.max(0, cart.total - couponDiscount);
+  const estimatedMrp = Math.round(cart.total * 1.142);
+  const discountAmount = estimatedMrp - cart.total;
 
   // Selected Address Details
   const activeAddr = addresses.find((a) => a.id === selectedAddressId) || addresses[0];
@@ -959,6 +998,51 @@ export default function CheckoutPage() {
 
             {/* ── COLUMN 3: PRICE DETAILS SIDEBAR (lg:col-span-3) ── */}
             <div className="lg:col-span-3 space-y-3">
+              {/* Coupon / Promo Code Card */}
+              <div className="bg-white rounded-xl border border-slate-200/90 p-4 shadow-2xs space-y-2.5">
+                <div className="flex items-center gap-2 text-slate-800 text-xs font-bold">
+                  <Tag className="h-4 w-4 text-blue-600" />
+                  <span>Coupons & Offers</span>
+                </div>
+                {appliedCoupon ? (
+                  <div className="flex items-center justify-between p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs">
+                    <div>
+                      <span className="font-mono font-bold text-emerald-800 tracking-wider">
+                        {appliedCoupon.code}
+                      </span>
+                      <span className="text-emerald-700 block text-[11px]">
+                        Saved ₹{appliedCoupon.discountAmount.toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleRemoveCoupon}
+                      className="text-xs text-rose-600 hover:text-rose-800 font-bold uppercase tracking-wider"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex gap-1.5">
+                    <input
+                      type="text"
+                      placeholder="ENTER COUPON"
+                      value={couponInput}
+                      onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                      className="flex-1 uppercase font-mono text-xs rounded-lg border border-slate-300 px-2.5 py-1.5 bg-slate-50 focus:bg-white tracking-wider"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleApplyCoupon}
+                      disabled={validatingCoupon}
+                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition disabled:opacity-50 shrink-0"
+                    >
+                      {validatingCoupon ? "…" : "Apply"}
+                    </button>
+                  </div>
+                )}
+              </div>
+
               {/* Price Details Card */}
               <div className="bg-white rounded-xl border border-slate-200/90 p-4 shadow-2xs space-y-3 text-xs">
                 <div className="flex justify-between items-center text-slate-700">
@@ -979,9 +1063,17 @@ export default function CheckoutPage() {
                   </button>
 
                   {showDiscounts && (
-                    <div className="flex justify-between items-center text-emerald-600 pl-2 text-[11px] pt-0.5">
-                      <span>MRP Discount</span>
-                      <span className="font-bold">-₹{discountAmount.toLocaleString("en-IN")}</span>
+                    <div className="space-y-1 pl-2 text-[11px] pt-0.5">
+                      <div className="flex justify-between items-center text-emerald-600">
+                        <span>MRP Discount</span>
+                        <span className="font-bold">-₹{discountAmount.toLocaleString("en-IN")}</span>
+                      </div>
+                      {appliedCoupon && (
+                        <div className="flex justify-between items-center text-emerald-600 font-semibold">
+                          <span>Coupon ({appliedCoupon.code})</span>
+                          <span>-₹{appliedCoupon.discountAmount.toLocaleString("en-IN")}</span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

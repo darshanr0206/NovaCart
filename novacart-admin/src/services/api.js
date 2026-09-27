@@ -260,6 +260,16 @@ export const returnsAPI = {
   updateStatus: (id, status, adminComment = '') => api.patch(`/admin/returns/${id}/status`, { status, adminComment }),
 }
 
+// ─── Coupons ─────────────────────────────────────────────────────────────────
+export const couponsAPI = {
+  getAll: () => api.get('/admin/coupons'),
+  getById: (id) => api.get(`/admin/coupons/${id}`),
+  create: (data) => api.post('/admin/coupons', data),
+  update: (id, data) => api.put(`/admin/coupons/${id}`, data),
+  delete: (id) => api.delete(`/admin/coupons/${id}`),
+  validate: (code, amount) => api.get(`/coupons/validate?code=${encodeURIComponent(code)}&amount=${amount}`),
+}
+
 // ─── Users ───────────────────────────────────────────────────────────────────
 export const usersAPI = {
   updateProfile: (data) => api.put('/users/me', data),

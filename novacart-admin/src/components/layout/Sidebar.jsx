@@ -11,6 +11,7 @@ import {
   Users,
   CreditCard,
   RotateCcw,
+  Ticket,
   BarChart3,
   Settings,
   LogOut,
@@ -28,6 +29,7 @@ const NAV_ITEMS = [
   { to: '/admin/customers', icon: Users, label: 'Customers' },
   { to: '/admin/payments', icon: CreditCard, label: 'Payments' },
   { to: '/admin/returns', icon: RotateCcw, label: 'Returns' },
+  { to: '/admin/coupons', icon: Ticket, label: 'Coupons' },
   { to: '/admin/analytics', icon: BarChart3, label: 'Analytics' },
   { to: '/admin/settings', icon: Settings, label: 'Settings' },
 ]

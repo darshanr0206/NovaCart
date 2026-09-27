@@ -29,6 +29,7 @@ public class ReturnServiceImpl implements ReturnService {
     private final UserRepository userRepository;
     private final OrderItemRepository orderItemRepository;
     private final PaymentRepository paymentRepository;
+    private final com.novacart.service.NotificationService notificationService;
 
     @Override
     @Transactional
@@ -70,7 +71,15 @@ public class ReturnServiceImpl implements ReturnService {
         orderRepository.save(order);
 
         log.info("Return request #{} created for order #{} by customer {}", saved.getId(), order.getOrderNumber(), email);
-        return toResponse(saved);
+        ReturnResponse resp = toResponse(saved);
+        try {
+            notificationService.sendNotification(user,
+                    "Return Requested: Order #" + order.getOrderNumber(),
+                    "We have received your return request for " + resp.getProduct() + ". Reason: " + request.getReason() + ".");
+        } catch (Exception e) {
+            log.warn("Could not dispatch return notification: {}", e.getMessage());
+        }
+        return resp;
     }
 
     @Override
@@ -97,7 +106,7 @@ public class ReturnServiceImpl implements ReturnService {
     @Override
     @Transactional(readOnly = true)
     public List<ReturnResponse> getAllReturns() {
-        return returnRequestRepository.findAllByOrderByCreatedAtDesc().stream()
+        return returnRequestRepository.findAllOrderByCreatedAtDesc().stream()
                 .map(this::toResponse)
                 .toList();
     }
@@ -105,7 +114,7 @@ public class ReturnServiceImpl implements ReturnService {
     @Override
     @Transactional(readOnly = true)
     public PageResponse<ReturnResponse> getAllReturns(Pageable pageable) {
-        Page<ReturnRequest> page = returnRequestRepository.findAllByOrderByCreatedAtDesc(pageable);
+        Page<ReturnRequest> page = returnRequestRepository.findAllPaged(pageable);
         return PageResponse.of(page.map(this::toResponse));
     }
 
@@ -137,6 +146,31 @@ public class ReturnServiceImpl implements ReturnService {
             }
 
             orderRepository.save(order);
+        }
+
+        try {
+            if (order != null && order.getUser() != null) {
+                if (newStatus == OrderStatus.RETURN_APPROVED) {
+                    notificationService.sendNotification(order.getUser(),
+                            "Return Approved: Order #" + order.getOrderNumber(),
+                            "Your return request for order #" + order.getOrderNumber() + " has been approved! Please keep the item packaged for pickup.");
+                } else if (newStatus == OrderStatus.RETURN_REJECTED) {
+                    String reasonText = request.getAdminComment() != null ? " Reason: " + request.getAdminComment() : "";
+                    notificationService.sendNotification(order.getUser(),
+                            "Return Request Rejected: Order #" + order.getOrderNumber(),
+                            "Your return request could not be approved by the admin team." + reasonText);
+                } else if (newStatus == OrderStatus.RETURNED) {
+                    notificationService.sendNotification(order.getUser(),
+                            "Item Received: Order #" + order.getOrderNumber(),
+                            "We have received your returned item. Refund processing is underway.");
+                } else if (newStatus == OrderStatus.REFUNDED) {
+                    notificationService.sendNotification(order.getUser(),
+                            "Refund Completed: Order #" + order.getOrderNumber(),
+                            "A refund of ₹" + (order.getTotal() != null ? order.getTotal() : "") + " has been successfully completed for order #" + order.getOrderNumber() + ".");
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Could not dispatch return status notification: {}", e.getMessage());
         }
 
         log.info("Return request #{} status updated to {}", updatedReq.getId(), newStatus);

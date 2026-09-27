@@ -93,19 +93,33 @@ public class OrderServiceImpl implements OrderService {
 
         BigDecimal discountAmount = BigDecimal.ZERO;
         if (request.getCouponCode() != null && !request.getCouponCode().isBlank()) {
-            Coupon coupon = couponRepository.findByCodeAndActiveTrue(request.getCouponCode())
-                    .orElseThrow(() -> new BadRequestException("Invalid or expired coupon"));
+            Coupon coupon = couponRepository.findByCodeAndActiveTrue(request.getCouponCode().trim().toUpperCase())
+                    .orElseThrow(() -> new BadRequestException("Invalid or inactive coupon: " + request.getCouponCode()));
             if (coupon.getExpiryDate().isBefore(java.time.LocalDateTime.now())) {
                 throw new BadRequestException("This coupon has expired");
             }
             if (coupon.getMinOrderValue() != null && subtotal.compareTo(coupon.getMinOrderValue()) < 0) {
-                throw new BadRequestException("Order does not meet the coupon's minimum value");
+                throw new BadRequestException("Order does not meet the minimum required amount of ₹" + coupon.getMinOrderValue());
             }
-            discountAmount = subtotal.multiply(coupon.getDiscountPercent().divide(BigDecimal.valueOf(100)))
-                    .setScale(2, RoundingMode.HALF_UP);
-            if (coupon.getMaxDiscountAmount() != null && discountAmount.compareTo(coupon.getMaxDiscountAmount()) > 0) {
-                discountAmount = coupon.getMaxDiscountAmount();
+            if (coupon.getUsageLimit() != null && coupon.getUsageCount() != null && coupon.getUsageCount() >= coupon.getUsageLimit()) {
+                throw new BadRequestException("This coupon has reached its maximum usage limit");
             }
+
+            if (coupon.getDiscountType() == Coupon.DiscountType.FIXED) {
+                discountAmount = coupon.getFixedDiscountAmount() != null ? coupon.getFixedDiscountAmount() : BigDecimal.ZERO;
+            } else {
+                BigDecimal pct = coupon.getDiscountPercent() != null ? coupon.getDiscountPercent() : BigDecimal.ZERO;
+                discountAmount = subtotal.multiply(pct.divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP))
+                        .setScale(2, RoundingMode.HALF_UP);
+                if (coupon.getMaxDiscountAmount() != null && discountAmount.compareTo(coupon.getMaxDiscountAmount()) > 0) {
+                    discountAmount = coupon.getMaxDiscountAmount();
+                }
+            }
+            if (discountAmount.compareTo(subtotal) > 0) {
+                discountAmount = subtotal;
+            }
+            coupon.setUsageCount((coupon.getUsageCount() != null ? coupon.getUsageCount() : 0) + 1);
+            couponRepository.save(coupon);
         }
 
         BigDecimal deliveryCharge = subtotal.compareTo(BigDecimal.valueOf(500)) >= 0
