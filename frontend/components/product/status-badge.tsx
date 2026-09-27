@@ -11,9 +11,10 @@ const STATUS_STYLES: Record<string, string> = {
   DELIVERED: "bg-emerald-50 text-emerald-700",
   CANCELLED: "bg-red-50 text-red-600",
   RETURN_REQUESTED: "bg-amber-50 text-amber-700",
-  RETURN_APPROVED: "bg-amber-50 text-amber-700",
-  RETURNED: "bg-amber-50 text-amber-700",
-  REFUNDED: "bg-amber-50 text-amber-700",
+  RETURN_APPROVED: "bg-teal-50 text-teal-700",
+  RETURN_REJECTED: "bg-red-50 text-red-600",
+  RETURNED: "bg-slate-100 text-slate-700",
+  REFUNDED: "bg-emerald-50 text-emerald-700",
 };
 
 export function StatusBadge({ status }: { status: OrderStatus | string }) {

@@ -12,6 +12,7 @@ const STATUS_STYLES = {
   CANCELLED:        'bg-red-500/15 text-red-300 border-red-500/30',
   RETURN_REQUESTED: 'bg-orange-500/15 text-orange-300 border-orange-500/30',
   RETURN_APPROVED:  'bg-teal-500/15 text-teal-300 border-teal-500/30',
+  RETURN_REJECTED:  'bg-red-500/15 text-red-300 border-red-500/30',
   RETURNED:         'bg-slate-400/15 text-slate-300 border-slate-400/30',
   REFUNDED:         'bg-green-500/15 text-green-300 border-green-500/30',
 
@@ -41,6 +42,8 @@ const STATUS_LABELS = {
   OUT_FOR_DELIVERY: 'Out for Delivery',
   RETURN_REQUESTED: 'Return Requested',
   RETURN_APPROVED:  'Return Approved',
+  RETURN_REJECTED:  'Return Rejected',
+  RETURNED:         'Returned',
   IN_STOCK:     'In Stock',
   LOW_STOCK:    'Low Stock',
   OUT_OF_STOCK: 'Out of Stock',

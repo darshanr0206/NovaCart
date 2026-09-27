@@ -18,14 +18,21 @@ public class ReturnRequest {
     private Order order;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "order_item_id", nullable = false)
+    @JoinColumn(name = "order_item_id", nullable = true)
     private OrderItem orderItem;
 
     @Enumerated(EnumType.STRING)
-    private ReturnType type; // RETURN or REPLACEMENT
+    @Builder.Default
+    private ReturnType type = ReturnType.RETURN;
 
     @Column(length = 1000)
     private String reason;
+
+    @Column(length = 2000)
+    private String note;
+
+    @Column(length = 1000)
+    private String adminComment;
 
     @Enumerated(EnumType.STRING)
     @Builder.Default
@@ -34,9 +41,17 @@ public class ReturnRequest {
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    private LocalDateTime updatedAt;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
+        updatedAt = LocalDateTime.now();
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        updatedAt = LocalDateTime.now();
     }
 
     public enum ReturnType { RETURN, REPLACEMENT }

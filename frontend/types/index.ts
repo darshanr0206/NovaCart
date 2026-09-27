@@ -77,7 +77,7 @@ export interface Cart {
 export type OrderStatus =
   | "PLACED" | "CONFIRMED" | "PROCESSING" | "PACKED" | "SHIPPED"
   | "OUT_FOR_DELIVERY" | "DELIVERED" | "CANCELLED"
-  | "RETURN_REQUESTED" | "RETURN_APPROVED" | "RETURNED" | "REFUNDED";
+  | "RETURN_REQUESTED" | "RETURN_APPROVED" | "RETURN_REJECTED" | "RETURNED" | "REFUNDED";
 
 export interface OrderItem {
   id: number;
@@ -98,6 +98,23 @@ export interface PaymentInfo {
   createdAt?: string;
 }
 
+export interface ReturnRequestInfo {
+  id: number;
+  orderId: number;
+  orderNumber?: string;
+  orderItemId?: number | null;
+  customer?: string;
+  customerEmail?: string;
+  product?: string;
+  amount?: number;
+  reason: string;
+  note?: string;
+  adminComment?: string;
+  status: OrderStatus;
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export interface Order {
   id: number;
   orderNumber: string;
@@ -115,6 +132,7 @@ export interface Order {
   paymentStatus?: string;
   paymentScreenshotUrl?: string;
   paymentMethod?: string;
+  returnRequest?: ReturnRequestInfo | null;
 }
 
 export interface AuthUser {

@@ -1,35 +1,16 @@
 # Dependencies
 node_modules/
-*/node_modules/
-*/*/node_modules/
-
-# Production builds
 .next/
-*/.next/
 target/
-*/target/
-dist/
-*/dist/
-.vite/
-*/.vite/
 *.class
 
-# Environment files and secrets
+# Environment files
+.env*.local
 .env
-.env.*
-*.env
-*/.env
-*/.env.*
-*/*/.env
-!**/.env.example
 
-# OS and Editor
-.DS_Store
-Thumbs.db
-.idea/
-*.suo
-*.ntvs*
-*.njsproj
+# Large dataset files (keep data directory tracked via README)
+data/*.csv
+data/*.zip
 
 # Logs
 *.log
@@ -37,8 +18,6 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Scratch & Archives
-*.zip
-*.tar.gz
-scratch/extracted_archives/
-download_server/
+# OS Files
+.DS_Store
+Thumbs.db

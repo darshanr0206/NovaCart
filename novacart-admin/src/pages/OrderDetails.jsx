@@ -3,14 +3,17 @@ import { useParams, useNavigate, useLocation, Link } from 'react-router-dom'
 import {
   ArrowLeft, MapPin, Phone, Mail, Package,
   CreditCard, CheckCircle2, Clock, Truck,
-  RefreshCw, ChevronDown, AlertCircle,
+  RefreshCw, ChevronDown, AlertCircle, RotateCcw,
 } from 'lucide-react'
 import { ordersAPI } from '../services/api'
 import StatusBadge from '../components/ui/StatusBadge'
 import { SkeletonText } from '../components/ui/SkeletonLoader'
 import toast from 'react-hot-toast'
 
-const ORDER_STATUSES = ['PLACED','CONFIRMED','PROCESSING','PACKED','SHIPPED','OUT_FOR_DELIVERY','DELIVERED','CANCELLED']
+const ORDER_STATUSES = [
+  'PLACED', 'CONFIRMED', 'PROCESSING', 'PACKED', 'SHIPPED', 'OUT_FOR_DELIVERY',
+  'DELIVERED', 'CANCELLED', 'RETURN_REQUESTED', 'RETURN_APPROVED', 'RETURN_REJECTED', 'RETURNED', 'REFUNDED'
+]
 
 const TIMELINE_ICONS = {
   PLACED: Clock,
@@ -21,6 +24,11 @@ const TIMELINE_ICONS = {
   OUT_FOR_DELIVERY: Truck,
   DELIVERED: CheckCircle2,
   CANCELLED: Clock,
+  RETURN_REQUESTED: RotateCcw,
+  RETURN_APPROVED: CheckCircle2,
+  RETURN_REJECTED: AlertCircle,
+  RETURNED: Package,
+  REFUNDED: CreditCard,
 }
 
 export default function OrderDetails() {
@@ -163,6 +171,35 @@ export default function OrderDetails() {
               )}
             </div>
           </div>
+
+          {/* Return Request Info if available */}
+          {order.returnRequest && (
+            <div className="admin-card p-5 border border-orange-500/30 bg-orange-500/5">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-semibold text-orange-300 flex items-center gap-2">
+                  <RotateCcw size={16} /> Return Request
+                </h2>
+                <StatusBadge status={order.returnRequest.status} />
+              </div>
+              <div className="space-y-1.5 text-sm">
+                <div>
+                  <span className="text-slate-400 font-medium">Reason: </span>
+                  <span className="text-slate-200">{order.returnRequest.reason}</span>
+                </div>
+                {order.returnRequest.note && (
+                  <div>
+                    <span className="text-slate-400 font-medium">Customer Note: </span>
+                    <span className="text-slate-300 italic">&quot;{order.returnRequest.note}&quot;</span>
+                  </div>
+                )}
+                {order.returnRequest.createdAt && (
+                  <div className="text-xs text-slate-500 pt-1">
+                    Requested on: {new Date(order.returnRequest.createdAt).toLocaleString('en-IN')}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Delivery address */}
           <div className="admin-card p-5">

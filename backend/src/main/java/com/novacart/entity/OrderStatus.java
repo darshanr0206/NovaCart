@@ -11,6 +11,7 @@ public enum OrderStatus {
     CANCELLED,
     RETURN_REQUESTED,
     RETURN_APPROVED,
+    RETURN_REJECTED,
     RETURNED,
     REFUNDED
 }

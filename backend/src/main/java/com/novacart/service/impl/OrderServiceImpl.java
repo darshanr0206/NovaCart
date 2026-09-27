@@ -3,6 +3,7 @@ package com.novacart.service.impl;
 import com.novacart.dto.request.CreateOrderRequest;
 import com.novacart.dto.response.OrderResponse;
 import com.novacart.dto.response.PageResponse;
+import com.novacart.dto.response.ReturnResponse;
 import com.novacart.entity.*;
 import com.novacart.exception.BadRequestException;
 import com.novacart.exception.ResourceNotFoundException;
@@ -33,6 +34,7 @@ public class OrderServiceImpl implements OrderService {
     private final InventoryRepository inventoryRepository;
     private final EmailService emailService;
     private final PaymentRepository paymentRepository;
+    private final ReturnRequestRepository returnRequestRepository;
 
     private static final Set<OrderStatus> CANCELLABLE = Set.of(
             OrderStatus.PLACED, OrderStatus.CONFIRMED, OrderStatus.PROCESSING);
@@ -321,6 +323,39 @@ public class OrderServiceImpl implements OrderService {
                     .build();
         }
 
+        ReturnResponse returnResponse = null;
+        try {
+            var rrOpt = returnRequestRepository.findFirstByOrderIdOrderByCreatedAtDesc(order.getId());
+            if (rrOpt.isPresent()) {
+                ReturnRequest rr = rrOpt.get();
+                String productTitle = "NovaCart Product";
+                if (rr.getOrderItem() != null) {
+                    productTitle = rr.getOrderItem().getProductNameSnapshot();
+                } else if (!items.isEmpty()) {
+                    productTitle = items.size() == 1 ? items.get(0).getProductName() : items.get(0).getProductName() + " (+" + (items.size() - 1) + " more)";
+                } else {
+                    productTitle = "Order #" + order.getOrderNumber();
+                }
+
+                returnResponse = ReturnResponse.builder()
+                        .id(rr.getId())
+                        .orderId(order.getId())
+                        .orderNumber(order.getOrderNumber())
+                        .orderItemId(rr.getOrderItem() != null ? rr.getOrderItem().getId() : null)
+                        .customer(order.getUser() != null ? order.getUser().getFullName() : "Customer")
+                        .customerEmail(order.getUser() != null ? order.getUser().getEmail() : "")
+                        .product(productTitle)
+                        .amount(order.getTotal())
+                        .reason(rr.getReason())
+                        .note(rr.getNote())
+                        .adminComment(rr.getAdminComment())
+                        .status(rr.getStatus())
+                        .createdAt(rr.getCreatedAt() != null ? rr.getCreatedAt().toString() : null)
+                        .updatedAt(rr.getUpdatedAt() != null ? rr.getUpdatedAt().toString() : null)
+                        .build();
+            }
+        } catch (Exception ignored) {}
+
         return OrderResponse.builder()
                 .id(order.getId())
                 .orderNumber(order.getOrderNumber())
@@ -338,6 +373,7 @@ public class OrderServiceImpl implements OrderService {
                 .paymentStatus(paymentStatusStr)
                 .paymentScreenshotUrl(paymentScreenshotUrl)
                 .paymentMethod(paymentMethod)
+                .returnRequest(returnResponse)
                 .build();
     }
 }

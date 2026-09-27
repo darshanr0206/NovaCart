@@ -27,6 +27,7 @@ public class OrderResponse {
     private String paymentStatus;
     private String paymentScreenshotUrl;
     private String paymentMethod;
+    private ReturnResponse returnRequest;
 
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class PaymentResponse {

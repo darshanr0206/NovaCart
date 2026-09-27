@@ -254,6 +254,12 @@ export const paymentsAPI = {
   },
 }
 
+// ─── Returns ─────────────────────────────────────────────────────────────────
+export const returnsAPI = {
+  getAll: () => api.get('/admin/returns'),
+  updateStatus: (id, status, adminComment = '') => api.patch(`/admin/returns/${id}/status`, { status, adminComment }),
+}
+
 // ─── Users ───────────────────────────────────────────────────────────────────
 export const usersAPI = {
   updateProfile: (data) => api.put('/users/me', data),
