@@ -72,13 +72,21 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneric(Exception ex, HttpServletRequest request) {
-        // Never leak stack traces to clients, but log it
         ex.printStackTrace();
+        Throwable root = ex;
+        while (root.getCause() != null && root.getCause() != root) {
+            root = root.getCause();
+        }
+        String rootMsg = root.getMessage();
+        String displayMsg = "Something went wrong. Please try again later.";
+        if (rootMsg != null && !rootMsg.isBlank() && !rootMsg.contains("Exception") && !rootMsg.contains("org.postgresql") && !rootMsg.contains("Hibernate") && !rootMsg.contains("SQL") && !rootMsg.contains("Hikari")) {
+            displayMsg = rootMsg;
+        }
         ErrorResponse error = ErrorResponse.builder()
                 .timestamp(LocalDateTime.now())
                 .status(HttpStatus.INTERNAL_SERVER_ERROR.value())
                 .error("Internal Server Error")
-                .message("Something went wrong. Please try again later.")
+                .message(displayMsg)
                 .path(request.getRequestURI())
                 .build();
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);

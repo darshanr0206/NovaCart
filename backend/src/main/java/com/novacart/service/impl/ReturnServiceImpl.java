@@ -64,6 +64,12 @@ public class ReturnServiceImpl implements ReturnService {
         }
 
         if (order.getStatus() != OrderStatus.DELIVERED) {
+            if (order.getStatus() == OrderStatus.RETURN_REQUESTED) {
+                var existing = returnRequestRepository.findFirstByOrderIdOrderByCreatedAtDesc(orderId);
+                if (existing.isPresent()) {
+                    return toResponse(existing.get());
+                }
+            }
             throw new BadRequestException("Returns are only allowed after an order has been successfully Delivered. Current status: " + order.getStatus());
         }
 
@@ -93,6 +99,8 @@ public class ReturnServiceImpl implements ReturnService {
                 .refundStatus("PENDING")
                 .refundAmount(returnAmount)
                 .refundPaymentMethod(paymentMethod)
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
                 .build();
 
         ReturnRequest saved = returnRequestRepository.save(returnRequest);
@@ -100,14 +108,18 @@ public class ReturnServiceImpl implements ReturnService {
         order.setStatus(OrderStatus.RETURN_REQUESTED);
         orderRepository.save(order);
 
-        // Send customer notification
-        notificationService.sendNotification(
-                user,
-                "Return Request Submitted",
-                "Your return request for order #" + order.getOrderNumber() + " has been received and is under review.",
-                "RETURN",
-                "/orders/" + order.getId()
-        );
+        // Send customer notification safely (non-blocking)
+        try {
+            notificationService.sendNotification(
+                    user,
+                    "Return Request Submitted",
+                    "Your return request for order #" + order.getOrderNumber() + " has been received and is under review.",
+                    "RETURN",
+                    "/orders/" + order.getId()
+            );
+        } catch (Exception notifEx) {
+            log.warn("Notice: Could not dispatch return notification for order #{}: {}", order.getOrderNumber(), notifEx.getMessage());
+        }
 
         log.info("Return request #{} created for order #{} by customer {}", saved.getId(), order.getOrderNumber(), email);
         return toResponse(saved);
