@@ -34,6 +34,10 @@ public class OrderResponse {
         private Long id;
         private String razorpayOrderId;
         private String razorpayPaymentId;
+        private String razorpayRefundId;
+        private String refundStatus;
+        private BigDecimal refundAmount;
+        private String refundedAt;
         private String paymentMethod;
         private String screenshotUrl;
         private BigDecimal amount;

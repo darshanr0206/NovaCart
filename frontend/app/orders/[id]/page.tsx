@@ -190,9 +190,9 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
         </div>
       </div>
 
-      {/* Return Status Banner */}
+      {/* Return & Refund Status Banner */}
       {isReturnStatus && (
-        <div className="card mb-6 p-5 sm:p-6 bg-gradient-to-br from-amber-500/5 via-amber-500/10 to-orange-500/5 border-2 border-amber-500/30 rounded-2xl shadow-sm">
+        <div className="card mb-6 p-5 sm:p-6 bg-gradient-to-br from-amber-500/5 via-amber-500/10 to-orange-500/5 border-2 border-amber-500/30 rounded-2xl shadow-sm space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-amber-200/60">
             <div className="flex items-center gap-2.5">
               <div className="h-9 w-9 rounded-xl bg-amber-500 text-white flex items-center justify-center font-bold shadow-xs">
@@ -204,9 +204,9 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
                 </h3>
                 <p className="text-xs text-graphite mt-0.5">
                   {order.status === "RETURN_REQUESTED" && "Your return request has been submitted and is under admin review."}
-                  {order.status === "RETURN_APPROVED" && "Your return has been approved! Pickup or inspection is being arranged."}
+                  {order.status === "RETURN_APPROVED" && "Your return has been approved! Doorstep pickup and verification is being arranged."}
                   {order.status === "RETURN_REJECTED" && "Your return request could not be approved by the admin team."}
-                  {order.status === "RETURNED" && "The returned item has been received and verified."}
+                  {order.status === "RETURNED" && "The returned item has been received and verified at our fulfillment center."}
                   {order.status === "REFUNDED" && "Your refund has been successfully completed!"}
                 </p>
               </div>
@@ -218,8 +218,57 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
             )}
           </div>
 
-          {(order.returnRequest?.reason || order.returnRequest?.note) && (
-            <div className="mt-4 pt-1 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+          {/* Refund Tracking Information */}
+          {(order.returnRequest?.refundStatus || order.status === "REFUNDED" || order.payment?.status === "REFUNDED") && (
+            <div className="bg-white/90 rounded-xl p-4 border border-amber-200/70 space-y-2">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <span className="text-xs font-bold text-ink uppercase tracking-wider flex items-center gap-1.5">
+                  <CreditCard className="h-3.5 w-3.5 text-emerald-600" />
+                  Refund Workflow Tracking
+                </span>
+                <span
+                  className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full uppercase ${
+                    order.status === "REFUNDED" || order.returnRequest?.refundStatus === "COMPLETED"
+                      ? "bg-emerald-100 text-emerald-800"
+                      : "bg-amber-100 text-amber-800"
+                  }`}
+                >
+                  {order.status === "REFUNDED" || order.returnRequest?.refundStatus === "COMPLETED"
+                    ? "REFUND COMPLETED"
+                    : order.returnRequest?.refundStatus || "REFUND INITIATED"}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-1">
+                <div>
+                  <span className="text-graphite block text-[11px]">Refund Amount:</span>
+                  <span className="font-bold text-ink text-sm">
+                    {formatINR(order.returnRequest?.refundAmount || order.total)}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-graphite block text-[11px]">Refund Destination:</span>
+                  <span className="font-medium text-ink">
+                    {order.returnRequest?.refundPaymentMethod === "RAZORPAY_ONLINE" || paymentMethod === "RAZORPAY"
+                      ? "Original Bank Account / VPA"
+                      : "Bank Transfer (COD Refund)"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-graphite block text-[11px]">Refund Reference ID:</span>
+                  <span className="font-mono text-ink text-[11px] font-semibold">
+                    {order.returnRequest?.refundTransactionId ||
+                      order.payment?.razorpayRefundId ||
+                      "Pending Gateway Dispatch"}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Return Reason, Notes & Admin Comment */}
+          {(order.returnRequest?.reason || order.returnRequest?.note || order.returnRequest?.adminComment) && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
               {order.returnRequest.reason && (
                 <div className="bg-white/80 p-3 rounded-xl border border-amber-200/50">
                   <span className="text-graphite font-semibold block mb-0.5">Return Reason:</span>
@@ -230,6 +279,12 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
                 <div className="bg-white/80 p-3 rounded-xl border border-amber-200/50">
                   <span className="text-graphite font-semibold block mb-0.5">Customer Note:</span>
                   <span className="text-ink font-medium italic">&quot;{order.returnRequest.note}&quot;</span>
+                </div>
+              )}
+              {order.returnRequest.adminComment && (
+                <div className="sm:col-span-2 bg-amber-50/80 p-3 rounded-xl border border-amber-300/50">
+                  <span className="text-amber-900 font-bold block mb-0.5">Note from NovaCart Admin:</span>
+                  <span className="text-amber-800">{order.returnRequest.adminComment}</span>
                 </div>
               )}
             </div>

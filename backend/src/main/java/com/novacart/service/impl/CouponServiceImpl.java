@@ -1,9 +1,12 @@
 package com.novacart.service.impl;
 
-import com.novacart.dto.request.CouponRequest;
+import com.novacart.dto.request.CouponCreateRequest;
+import com.novacart.dto.request.CouponUpdateRequest;
+import com.novacart.dto.request.CouponValidateRequest;
 import com.novacart.dto.response.CouponResponse;
 import com.novacart.dto.response.CouponValidateResponse;
 import com.novacart.entity.Coupon;
+import com.novacart.entity.DiscountType;
 import com.novacart.exception.BadRequestException;
 import com.novacart.exception.ResourceNotFoundException;
 import com.novacart.repository.CouponRepository;
@@ -26,53 +29,114 @@ public class CouponServiceImpl implements CouponService {
     private final CouponRepository couponRepository;
 
     @Override
+    @Transactional(readOnly = true)
+    public List<CouponResponse> getAllCoupons() {
+        return couponRepository.findAllByOrderByCreatedAtDesc().stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CouponResponse> getActivePublicCoupons() {
+        return couponRepository.findByActiveTrueAndExpiryDateAfterOrderByCreatedAtDesc(LocalDateTime.now()).stream()
+                .filter(c -> c.getUsageLimit() == null || c.getUsedCount() < c.getUsageLimit())
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CouponResponse getCouponById(Long id) {
+        Coupon coupon = couponRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Coupon not found with id: " + id));
+        return toResponse(coupon);
+    }
+
+    @Override
     @Transactional
-    public CouponResponse createCoupon(CouponRequest request) {
+    public CouponResponse createCoupon(CouponCreateRequest request) {
         String cleanCode = request.getCode().trim().toUpperCase();
-        if (couponRepository.findByCodeIgnoreCase(cleanCode).isPresent()) {
-            throw new BadRequestException("Coupon code already exists: " + cleanCode);
+        if (couponRepository.existsByCodeIgnoreCase(cleanCode)) {
+            throw new BadRequestException("Coupon code '" + cleanCode + "' already exists");
+        }
+
+        if (request.getDiscountValue().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BadRequestException("Discount value must be greater than 0");
+        }
+
+        if (request.getDiscountType() == DiscountType.PERCENTAGE && request.getDiscountValue().compareTo(BigDecimal.valueOf(100)) > 0) {
+            throw new BadRequestException("Percentage discount cannot exceed 100%");
         }
 
         Coupon coupon = Coupon.builder()
                 .code(cleanCode)
-                .discountType(request.getDiscountType() != null ? request.getDiscountType() : Coupon.DiscountType.PERCENTAGE)
-                .discountPercent(request.getDiscountPercent() != null ? request.getDiscountPercent() : BigDecimal.ZERO)
-                .fixedDiscountAmount(request.getFixedDiscountAmount())
+                .discountType(request.getDiscountType())
+                .discountValue(request.getDiscountValue())
+                .discountPercent(request.getDiscountType() == DiscountType.PERCENTAGE ? request.getDiscountValue() : null)
                 .minOrderValue(request.getMinOrderValue())
                 .maxDiscountAmount(request.getMaxDiscountAmount())
-                .usageLimit(request.getUsageLimit())
-                .usageCount(0)
                 .expiryDate(request.getExpiryDate())
-                .active(request.getActive() != null ? request.getActive() : true)
+                .usageLimit(request.getUsageLimit())
+                .usedCount(0)
+                .active(request.isActive())
                 .build();
 
         Coupon saved = couponRepository.save(coupon);
-        log.info("Created coupon #{}: {}", saved.getId(), saved.getCode());
+        log.info("Created coupon {} with type {} and value {}", saved.getCode(), saved.getDiscountType(), saved.getDiscountValue());
         return toResponse(saved);
     }
 
     @Override
     @Transactional
-    public CouponResponse updateCoupon(Long id, CouponRequest request) {
+    public CouponResponse updateCoupon(Long id, CouponUpdateRequest request) {
         Coupon coupon = couponRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Coupon not found with id: " + id));
 
-        String cleanCode = request.getCode().trim().toUpperCase();
-        if (!coupon.getCode().equalsIgnoreCase(cleanCode)) {
-            if (couponRepository.findByCodeIgnoreCase(cleanCode).isPresent()) {
-                throw new BadRequestException("Coupon code already exists: " + cleanCode);
+        if (request.getCode() != null && !request.getCode().isBlank()) {
+            String cleanCode = request.getCode().trim().toUpperCase();
+            if (!cleanCode.equalsIgnoreCase(coupon.getCode()) && couponRepository.existsByCodeIgnoreCase(cleanCode)) {
+                throw new BadRequestException("Coupon code '" + cleanCode + "' already exists");
             }
             coupon.setCode(cleanCode);
         }
 
-        if (request.getDiscountType() != null) coupon.setDiscountType(request.getDiscountType());
-        if (request.getDiscountPercent() != null) coupon.setDiscountPercent(request.getDiscountPercent());
-        coupon.setFixedDiscountAmount(request.getFixedDiscountAmount());
-        coupon.setMinOrderValue(request.getMinOrderValue());
-        coupon.setMaxDiscountAmount(request.getMaxDiscountAmount());
-        coupon.setUsageLimit(request.getUsageLimit());
-        if (request.getExpiryDate() != null) coupon.setExpiryDate(request.getExpiryDate());
-        if (request.getActive() != null) coupon.setActive(request.getActive());
+        if (request.getDiscountType() != null) {
+            coupon.setDiscountType(request.getDiscountType());
+        }
+
+        if (request.getDiscountValue() != null) {
+            if (request.getDiscountValue().compareTo(BigDecimal.ZERO) <= 0) {
+                throw new BadRequestException("Discount value must be greater than 0");
+            }
+            if (coupon.getDiscountType() == DiscountType.PERCENTAGE && request.getDiscountValue().compareTo(BigDecimal.valueOf(100)) > 0) {
+                throw new BadRequestException("Percentage discount cannot exceed 100%");
+            }
+            coupon.setDiscountValue(request.getDiscountValue());
+            if (coupon.getDiscountType() == DiscountType.PERCENTAGE) {
+                coupon.setDiscountPercent(request.getDiscountValue());
+            }
+        }
+
+        if (request.getMinOrderValue() != null) {
+            coupon.setMinOrderValue(request.getMinOrderValue());
+        }
+
+        if (request.getMaxDiscountAmount() != null) {
+            coupon.setMaxDiscountAmount(request.getMaxDiscountAmount());
+        }
+
+        if (request.getExpiryDate() != null) {
+            coupon.setExpiryDate(request.getExpiryDate());
+        }
+
+        if (request.getUsageLimit() != null) {
+            coupon.setUsageLimit(request.getUsageLimit());
+        }
+
+        if (request.getActive() != null) {
+            coupon.setActive(request.getActive());
+        }
 
         Coupon updated = couponRepository.save(coupon);
         log.info("Updated coupon #{}: {}", updated.getId(), updated.getCode());
@@ -85,113 +149,145 @@ public class CouponServiceImpl implements CouponService {
         Coupon coupon = couponRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Coupon not found with id: " + id));
         couponRepository.delete(coupon);
-        log.info("Deleted coupon #{}", id);
+        log.info("Deleted coupon #{}: {}", id, coupon.getCode());
     }
 
     @Override
-    @Transactional(readOnly = true)
-    public List<CouponResponse> getAllCoupons() {
-        return couponRepository.findAllByOrderByExpiryDateDesc().stream()
-                .map(this::toResponse)
-                .toList();
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public CouponResponse getCoupon(Long id) {
+    @Transactional
+    public CouponResponse toggleStatus(Long id) {
         Coupon coupon = couponRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Coupon not found with id: " + id));
-        return toResponse(coupon);
+        coupon.setActive(!coupon.isActive());
+        Coupon updated = couponRepository.save(coupon);
+        log.info("Toggled coupon #{} active status to {}", id, updated.isActive());
+        return toResponse(updated);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public CouponValidateResponse validateCoupon(String code, BigDecimal cartTotal) {
-        if (code == null || code.isBlank()) {
-            return CouponValidateResponse.builder()
-                    .valid(false)
-                    .message("Coupon code cannot be empty")
-                    .discountAmount(BigDecimal.ZERO)
-                    .build();
-        }
+    public CouponValidateResponse validateCoupon(CouponValidateRequest request) {
+        String cleanCode = request.getCode() != null ? request.getCode().trim().toUpperCase() : "";
+        BigDecimal amount = request.getAmount() != null ? request.getAmount() : BigDecimal.ZERO;
 
-        String cleanCode = code.trim().toUpperCase();
-        var opt = couponRepository.findByCodeAndActiveTrue(cleanCode);
-        if (opt.isEmpty()) {
+        Coupon coupon = couponRepository.findByCodeIgnoreCase(cleanCode)
+                .orElse(null);
+
+        if (coupon == null) {
             return CouponValidateResponse.builder()
                     .valid(false)
                     .code(cleanCode)
-                    .message("Invalid or inactive coupon code")
-                    .discountAmount(BigDecimal.ZERO)
+                    .message("Invalid coupon code")
                     .build();
         }
 
-        Coupon coupon = opt.get();
-        if (coupon.getExpiryDate().isBefore(LocalDateTime.now())) {
+        if (!coupon.isActive()) {
+            return CouponValidateResponse.builder()
+                    .valid(false)
+                    .code(cleanCode)
+                    .message("This coupon is no longer active")
+                    .build();
+        }
+
+        if (coupon.getExpiryDate() != null && coupon.getExpiryDate().isBefore(LocalDateTime.now())) {
             return CouponValidateResponse.builder()
                     .valid(false)
                     .code(cleanCode)
                     .message("This coupon has expired")
-                    .discountAmount(BigDecimal.ZERO)
                     .build();
         }
 
-        if (coupon.getMinOrderValue() != null && cartTotal.compareTo(coupon.getMinOrderValue()) < 0) {
-            return CouponValidateResponse.builder()
-                    .valid(false)
-                    .code(cleanCode)
-                    .message("Minimum order of ₹" + coupon.getMinOrderValue() + " required to use this coupon")
-                    .discountAmount(BigDecimal.ZERO)
-                    .build();
-        }
-
-        if (coupon.getUsageLimit() != null && coupon.getUsageCount() != null && coupon.getUsageCount() >= coupon.getUsageLimit()) {
+        if (coupon.getUsageLimit() != null && coupon.getUsedCount() >= coupon.getUsageLimit()) {
             return CouponValidateResponse.builder()
                     .valid(false)
                     .code(cleanCode)
                     .message("This coupon has reached its maximum usage limit")
-                    .discountAmount(BigDecimal.ZERO)
                     .build();
         }
 
-        BigDecimal discount = BigDecimal.ZERO;
-        if (coupon.getDiscountType() == Coupon.DiscountType.FIXED) {
-            discount = coupon.getFixedDiscountAmount() != null ? coupon.getFixedDiscountAmount() : BigDecimal.ZERO;
-        } else {
-            discount = cartTotal.multiply(coupon.getDiscountPercent().divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP))
-                    .setScale(2, RoundingMode.HALF_UP);
-            if (coupon.getMaxDiscountAmount() != null && discount.compareTo(coupon.getMaxDiscountAmount()) > 0) {
-                discount = coupon.getMaxDiscountAmount();
-            }
+        if (coupon.getMinOrderValue() != null && amount.compareTo(coupon.getMinOrderValue()) < 0) {
+            return CouponValidateResponse.builder()
+                    .valid(false)
+                    .code(cleanCode)
+                    .message("Minimum order value of ₹" + coupon.getMinOrderValue().toPlainString() + " required for this coupon")
+                    .build();
         }
 
-        if (discount.compareTo(cartTotal) > 0) {
-            discount = cartTotal;
-        }
+        BigDecimal discountAmount = calculateDiscount(coupon, amount);
+        BigDecimal finalTotal = amount.subtract(discountAmount).max(BigDecimal.ZERO);
 
         return CouponValidateResponse.builder()
                 .valid(true)
-                .code(cleanCode)
-                .discountAmount(discount)
-                .message("Coupon applied successfully! You save ₹" + discount)
+                .code(coupon.getCode())
+                .discountType(coupon.getDiscountType())
+                .discountValue(coupon.getDiscountValue() != null ? coupon.getDiscountValue() : coupon.getDiscountPercent())
+                .discountAmount(discountAmount)
+                .finalTotal(finalTotal)
+                .message("Coupon applied! You saved ₹" + discountAmount.toPlainString())
                 .build();
+    }
+
+    @Override
+    public BigDecimal calculateDiscount(Coupon coupon, BigDecimal subtotal) {
+        if (coupon == null || subtotal == null || subtotal.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO;
+        }
+
+        BigDecimal discountValue = coupon.getDiscountValue();
+        if (discountValue == null && coupon.getDiscountPercent() != null) {
+            discountValue = coupon.getDiscountPercent();
+        }
+        if (discountValue == null) {
+            return BigDecimal.ZERO;
+        }
+
+        BigDecimal discountAmount = BigDecimal.ZERO;
+
+        if (coupon.getDiscountType() == DiscountType.FIXED) {
+            discountAmount = discountValue.min(subtotal);
+        } else {
+            // PERCENTAGE
+            discountAmount = subtotal.multiply(discountValue.divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP))
+                    .setScale(2, RoundingMode.HALF_UP);
+            if (coupon.getMaxDiscountAmount() != null && discountAmount.compareTo(coupon.getMaxDiscountAmount()) > 0) {
+                discountAmount = coupon.getMaxDiscountAmount();
+            }
+        }
+
+        return discountAmount.min(subtotal).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    @Override
+    @Transactional
+    public void recordCouponUsage(String code) {
+        if (code == null || code.isBlank()) return;
+        couponRepository.findByCodeIgnoreCase(code.trim()).ifPresent(coupon -> {
+            int currentUsed = coupon.getUsedCount() != null ? coupon.getUsedCount() : 0;
+            coupon.setUsedCount(currentUsed + 1);
+            couponRepository.save(coupon);
+            log.info("Recorded usage for coupon {}. Total used: {}", coupon.getCode(), coupon.getUsedCount());
+        });
     }
 
     @Override
     public CouponResponse toResponse(Coupon coupon) {
         if (coupon == null) return null;
+        boolean isExpired = coupon.getExpiryDate() != null && coupon.getExpiryDate().isBefore(LocalDateTime.now());
+        BigDecimal val = coupon.getDiscountValue() != null ? coupon.getDiscountValue() : coupon.getDiscountPercent();
+
         return CouponResponse.builder()
                 .id(coupon.getId())
                 .code(coupon.getCode())
-                .discountType(coupon.getDiscountType())
-                .discountPercent(coupon.getDiscountPercent())
-                .fixedDiscountAmount(coupon.getFixedDiscountAmount())
+                .discountType(coupon.getDiscountType() != null ? coupon.getDiscountType() : DiscountType.PERCENTAGE)
+                .discountValue(val)
+                .discountPercent(coupon.getDiscountPercent() != null ? coupon.getDiscountPercent() : (coupon.getDiscountType() == DiscountType.PERCENTAGE ? val : null))
                 .minOrderValue(coupon.getMinOrderValue())
                 .maxDiscountAmount(coupon.getMaxDiscountAmount())
+                .expiryDate(coupon.getExpiryDate() != null ? coupon.getExpiryDate().toString() : null)
                 .usageLimit(coupon.getUsageLimit())
-                .usageCount(coupon.getUsageCount() != null ? coupon.getUsageCount() : 0)
-                .expiryDate(coupon.getExpiryDate())
+                .usedCount(coupon.getUsedCount() != null ? coupon.getUsedCount() : 0)
                 .active(coupon.isActive())
+                .expired(isExpired)
+                .createdAt(coupon.getCreatedAt() != null ? coupon.getCreatedAt().toString() : null)
                 .build();
     }
 }

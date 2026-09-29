@@ -1,19 +1,36 @@
 import { api } from "@/lib/api";
 
-export interface CouponValidateResult {
-  valid: boolean;
+export interface CouponResponse {
+  id: number;
   code: string;
-  discountAmount: number;
-  finalAmount: number;
-  message: string;
-  discountType?: string;
+  discountType: "PERCENTAGE" | "FIXED";
+  discountValue: number;
   discountPercent?: number;
-  fixedDiscountAmount?: number;
+  minOrderValue?: number;
+  maxDiscountAmount?: number;
+  expiryDate: string;
+  usageLimit?: number;
+  usedCount: number;
+  active: boolean;
+  expired: boolean;
 }
 
-export async function validateCoupon(code: string, amount: number): Promise<CouponValidateResult> {
-  const { data } = await api.get("/coupons/validate", {
-    params: { code, amount },
-  });
+export interface CouponValidateResponse {
+  valid: boolean;
+  code: string;
+  discountType?: "PERCENTAGE" | "FIXED";
+  discountValue?: number;
+  discountAmount?: number;
+  finalTotal?: number;
+  message?: string;
+}
+
+export async function getActiveCoupons(): Promise<CouponResponse[]> {
+  const { data } = await api.get("/coupons/active");
+  return data || [];
+}
+
+export async function validateCoupon(code: string, amount: number): Promise<CouponValidateResponse> {
+  const { data } = await api.post("/coupons/validate", { code, amount });
   return data;
 }

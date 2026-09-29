@@ -91,6 +91,7 @@ export interface PaymentInfo {
   id?: number;
   razorpayOrderId?: string;
   razorpayPaymentId?: string;
+  razorpayRefundId?: string;
   paymentMethod?: string;
   screenshotUrl?: string;
   amount?: number;
@@ -111,6 +112,12 @@ export interface ReturnRequestInfo {
   note?: string;
   adminComment?: string;
   status: OrderStatus;
+  refundStatus?: "NONE" | "INITIATED" | "PROCESSING" | "COMPLETED" | "FAILED" | string;
+  refundAmount?: number;
+  refundTransactionId?: string;
+  refundPaymentMethod?: string;
+  refundedAt?: string;
+  razorpayRefundId?: string;
   createdAt: string;
   updatedAt?: string;
 }

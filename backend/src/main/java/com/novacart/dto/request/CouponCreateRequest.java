@@ -1,6 +1,6 @@
 package com.novacart.dto.request;
 
-import com.novacart.entity.Coupon;
+import com.novacart.entity.DiscountType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
@@ -15,26 +15,26 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class CouponRequest {
+public class CouponCreateRequest {
+
     @NotBlank(message = "Coupon code is required")
     private String code;
 
-    @Builder.Default
-    private Coupon.DiscountType discountType = Coupon.DiscountType.PERCENTAGE;
+    @NotNull(message = "Discount type is required")
+    private DiscountType discountType;
 
-    private BigDecimal discountPercent;
-
-    private BigDecimal fixedDiscountAmount;
+    @NotNull(message = "Discount value is required")
+    private BigDecimal discountValue;
 
     private BigDecimal minOrderValue;
 
     private BigDecimal maxDiscountAmount;
 
-    private Integer usageLimit;
-
     @NotNull(message = "Expiry date is required")
     private LocalDateTime expiryDate;
 
+    private Integer usageLimit;
+
     @Builder.Default
-    private Boolean active = true;
+    private boolean active = true;
 }

@@ -10,9 +10,9 @@ import { useCartStore } from "@/store/cart-store";
 import { getCart } from "@/services/cart-service";
 import { SearchSuggestion } from "@/types";
 import { getSearchSuggestions } from "@/services/product-service";
-import { getUnreadNotificationCount } from "@/services/notification-service";
 import { ImageSearchModal } from "@/components/product/image-search-modal";
 import { SearchBar } from "./search-bar";
+import { NotificationDropdown } from "./notification-dropdown";
 
 import { CANONICAL_CATEGORIES } from "@/lib/categories";
 
@@ -38,19 +38,10 @@ export function SiteHeader() {
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
   const categoryDropdownRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLFormElement>(null);
-  const [unreadNotifs, setUnreadNotifs] = useState(0);
 
   useEffect(() => {
     hydrate();
   }, [hydrate]);
-
-  useEffect(() => {
-    if (hydrated && user) {
-      getUnreadNotificationCount()
-        .then((c) => setUnreadNotifs(c))
-        .catch(() => {});
-    }
-  }, [hydrated, user, pathname]);
 
   useEffect(() => {
     if (hydrated && user) {
@@ -147,7 +138,10 @@ export function SiteHeader() {
         <div className="flex h-16 items-center justify-between px-4 sm:px-6 md:hidden">
           <Logo />
 
-          <div className="flex items-center gap-5 text-slate-800">
+          <div className="flex items-center gap-4 text-slate-800">
+            {/* 0. Notifications */}
+            <NotificationDropdown />
+
             {/* 1. Wishlist */}
             <Link
               href="/wishlist"
@@ -171,23 +165,7 @@ export function SiteHeader() {
               )}
             </Link>
 
-            {/* 3. Notifications */}
-            {hydrated && user && (
-              <Link
-                href="/account/notifications"
-                aria-label="Notifications"
-                className="relative p-1 hover:text-nova-600 transition-colors text-slate-800"
-              >
-                <Bell className="h-6 w-6 stroke-[1.8]" />
-                {unreadNotifs > 0 && (
-                  <span className="absolute -top-1 -right-1.5 grid h-4 w-4 place-items-center rounded-full bg-blue-600 text-[9px] font-bold text-white shadow-xs">
-                    {unreadNotifs > 9 ? "9+" : unreadNotifs}
-                  </span>
-                )}
-              </Link>
-            )}
-
-            {/* 4. Hamburger Menu */}
+            {/* 3. Hamburger Menu */}
             <button
               type="button"
               onClick={() => setDrawerOpen(true)}
@@ -236,6 +214,7 @@ export function SiteHeader() {
 
           {/* Desktop Right Icons */}
           <div className="ml-auto flex items-center gap-4">
+            <NotificationDropdown />
             <Link href="/wishlist" aria-label="Wishlist" className="text-graphite hover:text-ink p-1">
               <Heart className="h-5 w-5 stroke-[1.8]" />
             </Link>
@@ -247,16 +226,6 @@ export function SiteHeader() {
                 </span>
               )}
             </Link>
-            {hydrated && user && (
-              <Link href="/account/notifications" aria-label="Notifications" className="relative text-graphite hover:text-ink p-1">
-                <Bell className="h-5 w-5 stroke-[1.8]" />
-                {unreadNotifs > 0 && (
-                  <span className="absolute -right-1 -top-1 grid h-4 w-4 place-items-center rounded-full bg-blue-600 text-[10px] font-bold text-white shadow-xs">
-                    {unreadNotifs > 9 ? "9+" : unreadNotifs}
-                  </span>
-                )}
-              </Link>
-            )}
             <Link
               href={hydrated && user ? "/account" : "/login"}
               className="flex items-center gap-1.5 rounded-full border border-line px-3 py-1.5 text-xs sm:text-sm text-ink hover:border-ink transition-colors"

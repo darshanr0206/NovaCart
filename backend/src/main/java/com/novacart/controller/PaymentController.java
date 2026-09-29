@@ -10,6 +10,7 @@ import com.novacart.exception.ResourceNotFoundException;
 import com.novacart.repository.OrderRepository;
 import com.novacart.repository.PaymentRepository;
 import com.novacart.service.EmailService;
+import com.novacart.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -44,6 +45,7 @@ public class PaymentController {
     private final PaymentRepository paymentRepository;
     private final OrderRepository orderRepository;
     private final EmailService emailService;
+    private final NotificationService notificationService;
     private final Cloudinary cloudinary;
 
     @Value("${razorpay.key-id:}")
@@ -152,11 +154,20 @@ public class PaymentController {
                 order.getOrderNumber(), payment.getPaymentMethod(), payment.getRazorpayPaymentId());
 
         try {
-            if (order.getUser() != null && order.getUser().getEmail() != null) {
-                emailService.sendPaymentConfirmationEmail(order.getUser().getEmail(), order.getOrderNumber());
+            if (order.getUser() != null) {
+                notificationService.sendNotification(
+                        order.getUser(),
+                        "Payment Successful",
+                        "Your payment of ₹" + payment.getAmount() + " for order #" + order.getOrderNumber() + " was confirmed.",
+                        "ORDER",
+                        "/orders/" + order.getId()
+                );
+                if (order.getUser().getEmail() != null) {
+                    emailService.sendPaymentConfirmationEmail(order.getUser().getEmail(), order.getOrderNumber());
+                }
             }
         } catch (Exception e) {
-            log.warn("Could not send payment confirmation email: {}", e.getMessage());
+            log.warn("Could not send payment notification/email: {}", e.getMessage());
         }
 
         return ResponseEntity.ok(Map.of(

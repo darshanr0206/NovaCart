@@ -254,12 +254,6 @@ export const paymentsAPI = {
   },
 }
 
-// ─── Returns ─────────────────────────────────────────────────────────────────
-export const returnsAPI = {
-  getAll: () => api.get('/admin/returns'),
-  updateStatus: (id, status, adminComment = '') => api.patch(`/admin/returns/${id}/status`, { status, adminComment }),
-}
-
 // ─── Coupons ─────────────────────────────────────────────────────────────────
 export const couponsAPI = {
   getAll: () => api.get('/admin/coupons'),
@@ -267,7 +261,13 @@ export const couponsAPI = {
   create: (data) => api.post('/admin/coupons', data),
   update: (id, data) => api.put(`/admin/coupons/${id}`, data),
   delete: (id) => api.delete(`/admin/coupons/${id}`),
-  validate: (code, amount) => api.get(`/coupons/validate?code=${encodeURIComponent(code)}&amount=${amount}`),
+  toggle: (id) => api.patch(`/admin/coupons/${id}/toggle`),
+}
+
+// ─── Returns ─────────────────────────────────────────────────────────────────
+export const returnsAPI = {
+  getAll: () => api.get('/admin/returns'),
+  updateStatus: (id, status, adminComment = '') => api.patch(`/admin/returns/${id}/status`, { status, adminComment }),
 }
 
 // ─── Users ───────────────────────────────────────────────────────────────────
@@ -291,12 +291,6 @@ export const MOCK_PAYMENTS = [
   { id: 3, orderId: 'ORD-1003', customer: 'Ananya Patel', amount: 899.0, method: 'Net Banking', transactionId: 'rzp_pay_ghi789', status: 'PENDING', createdAt: '2025-09-03T09:00:00' },
   { id: 4, orderId: 'ORD-1004', customer: 'Vikram Singh', amount: 2100.0, method: 'UPI', transactionId: 'rzp_pay_jkl012', status: 'FAILED', createdAt: '2025-09-04T16:45:00' },
   { id: 5, orderId: 'ORD-1005', customer: 'Sneha Reddy', amount: 4500.0, method: 'Card', transactionId: 'rzp_pay_mno345', status: 'REFUNDED', createdAt: '2025-09-05T11:20:00' },
-]
-
-export const MOCK_RETURNS = [
-  { id: 1, orderId: 'ORD-1001', customer: 'Priya Sharma', product: 'Wireless Headphones', reason: 'Defective product - no sound from left ear', amount: 1250.0, status: 'RETURN_REQUESTED', createdAt: '2025-09-08T10:00:00' },
-  { id: 2, orderId: 'ORD-1003', customer: 'Ananya Patel', product: 'Cotton Kurta Set', reason: 'Wrong size delivered', amount: 899.0, status: 'RETURN_APPROVED', createdAt: '2025-09-06T14:30:00' },
-  { id: 3, orderId: 'ORD-1007', customer: 'Rahul Gupta', product: 'Stainless Steel Water Bottle', reason: 'Leaking lid', amount: 450.0, status: 'REFUNDED', createdAt: '2025-09-04T09:15:00' },
 ]
 
 export const MOCK_ANALYTICS = {

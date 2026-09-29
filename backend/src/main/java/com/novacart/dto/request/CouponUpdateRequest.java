@@ -1,4 +1,4 @@
-package com.novacart.dto.response;
+package com.novacart.dto.request;
 
 import com.novacart.entity.DiscountType;
 import lombok.AllArgsConstructor;
@@ -7,23 +7,20 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class CouponResponse {
-    private Long id;
+public class CouponUpdateRequest {
+
     private String code;
     private DiscountType discountType;
     private BigDecimal discountValue;
-    private BigDecimal discountPercent;
     private BigDecimal minOrderValue;
     private BigDecimal maxDiscountAmount;
-    private String expiryDate;
+    private LocalDateTime expiryDate;
     private Integer usageLimit;
-    private Integer usedCount;
-    private boolean active;
-    private boolean expired;
-    private String createdAt;
+    private Boolean active;
 }

@@ -1,30 +1,39 @@
 import { api } from "@/lib/api";
+import { PageResponse } from "@/types";
 
-export interface AppNotification {
+export interface CustomerNotification {
   id: number;
-  userId: number;
   title: string;
   message: string;
   type: string;
-  read: boolean;
   link?: string;
+  isRead: boolean;
   createdAt: string;
 }
 
-export async function getNotifications(): Promise<AppNotification[]> {
-  const { data } = await api.get("/notifications");
+export async function getMyNotifications(page = 0, size = 20): Promise<PageResponse<CustomerNotification>> {
+  const { data } = await api.get("/notifications", { params: { page, size } });
   return data;
 }
 
-export async function getUnreadNotificationCount(): Promise<number> {
-  const { data } = await api.get("/notifications/unread-count");
-  return data?.count || 0;
+export async function getRecentNotifications(): Promise<CustomerNotification[]> {
+  const { data } = await api.get("/notifications/recent");
+  return data || [];
 }
 
-export async function markNotificationAsRead(id: number): Promise<void> {
-  await api.put(`/notifications/${id}/read`);
+export async function getUnreadCount(): Promise<number> {
+  try {
+    const { data } = await api.get("/notifications/unread-count");
+    return data?.unreadCount || 0;
+  } catch {
+    return 0;
+  }
 }
 
-export async function markAllNotificationsAsRead(): Promise<void> {
-  await api.put("/notifications/read-all");
+export async function markAsRead(id: number): Promise<void> {
+  await api.patch(`/notifications/${id}/read`);
+}
+
+export async function markAllAsRead(): Promise<void> {
+  await api.patch("/notifications/read-all");
 }

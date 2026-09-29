@@ -77,8 +77,9 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/products/**", "/api/v1/products/**",
                         "/api/categories/**", "/api/v1/categories/**",
                         "/api/sellers/**", "/api/v1/sellers/**",
+                        "/api/coupons/**", "/api/v1/coupons/**",
                         "/api/recommendations/**", "/api/v1/recommendations/**").permitAll()
-                .requestMatchers(HttpMethod.POST, "/api/products/search-by-image", "/api/v1/products/search-by-image").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/products/search-by-image", "/api/v1/products/search-by-image", "/api/coupons/**", "/api/v1/coupons/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/products/*/reviews", "/api/v1/products/*/reviews").permitAll()
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html", "/uploads/**").permitAll()
                 .requestMatchers("/api/admin/**", "/api/v1/admin/**").hasRole("ADMIN")

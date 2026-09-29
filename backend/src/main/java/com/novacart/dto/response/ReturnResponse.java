@@ -25,6 +25,12 @@ public class ReturnResponse {
     private String note;
     private String adminComment;
     private OrderStatus status;
+    private String refundStatus;
+    private BigDecimal refundAmount;
+    private String refundTransactionId;
+    private String refundPaymentMethod;
+    private String refundedAt;
+    private String paymentMethod;
     private String createdAt;
     private String updatedAt;
 }

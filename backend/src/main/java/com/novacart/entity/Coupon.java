@@ -18,32 +18,71 @@ public class Coupon {
     private String code;
 
     @Enumerated(EnumType.STRING)
-    @Column(length = 20)
+    @Column(name = "discount_type", nullable = false)
     @Builder.Default
     private DiscountType discountType = DiscountType.PERCENTAGE;
 
-    @Column(precision = 5, scale = 2)
+    @Column(name = "discount_value", precision = 12, scale = 2)
+    private BigDecimal discountValue;
+
+    @Column(name = "discount_percent", precision = 5, scale = 2)
     private BigDecimal discountPercent;
 
-    @Column(precision = 12, scale = 2)
-    private BigDecimal fixedDiscountAmount;
-
-    @Column(precision = 12, scale = 2)
+    @Column(name = "min_order_value", precision = 12, scale = 2)
     private BigDecimal minOrderValue;
 
-    @Column(precision = 12, scale = 2)
+    @Column(name = "max_discount_amount", precision = 12, scale = 2)
     private BigDecimal maxDiscountAmount;
 
+    @Column(name = "expiry_date", nullable = false)
+    private LocalDateTime expiryDate;
+
+    @Column(name = "usage_limit")
     private Integer usageLimit;
 
+    @Column(name = "used_count", nullable = false)
     @Builder.Default
-    private Integer usageCount = 0;
-
-    @Column(nullable = false)
-    private LocalDateTime expiryDate;
+    private Integer usedCount = 0;
 
     @Builder.Default
     private boolean active = true;
 
-    public enum DiscountType { PERCENTAGE, FIXED }
+    @Column(name = "created_at")
+    private LocalDateTime createdAt;
+
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
+    @PrePersist
+    protected void onCreate() {
+        createdAt = LocalDateTime.now();
+        updatedAt = LocalDateTime.now();
+        if (code != null) {
+            code = code.trim().toUpperCase();
+        }
+        if (discountType == null) {
+            discountType = DiscountType.PERCENTAGE;
+        }
+        if (discountValue == null && discountPercent != null) {
+            discountValue = discountPercent;
+        } else if (discountPercent == null && discountValue != null && discountType == DiscountType.PERCENTAGE) {
+            discountPercent = discountValue;
+        }
+        if (usedCount == null) {
+            usedCount = 0;
+        }
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        updatedAt = LocalDateTime.now();
+        if (code != null) {
+            code = code.trim().toUpperCase();
+        }
+        if (discountValue == null && discountPercent != null) {
+            discountValue = discountPercent;
+        } else if (discountPercent == null && discountValue != null && discountType == DiscountType.PERCENTAGE) {
+            discountPercent = discountValue;
+        }
+    }
 }

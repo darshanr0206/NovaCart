@@ -22,6 +22,18 @@ public class Payment {
     private String razorpayPaymentId;
     private String razorpaySignature;
 
+    @Column(name = "razorpay_refund_id")
+    private String razorpayRefundId;
+
+    @Column(name = "refund_status")
+    private String refundStatus;
+
+    @Column(name = "refund_amount", precision = 12, scale = 2)
+    private BigDecimal refundAmount;
+
+    @Column(name = "refunded_at")
+    private LocalDateTime refundedAt;
+
     @Column(name = "payment_method")
     private String paymentMethod;
 

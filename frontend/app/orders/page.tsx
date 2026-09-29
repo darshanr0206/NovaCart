@@ -59,8 +59,13 @@ export default function OrdersPage() {
           item.productName.toLowerCase().includes(searchQuery.toLowerCase().trim())
         );
 
+      const isReturnStatus = [
+        "RETURN_REQUESTED", "RETURN_APPROVED", "RETURN_REJECTED", "RETURNED", "REFUNDED"
+      ].includes(order.status.toUpperCase()) || Boolean(order.returnRequest);
+
       const matchesStatus =
         statusFilter === "ALL" ||
+        (statusFilter === "RETURNS" && isReturnStatus) ||
         order.status.toUpperCase() === statusFilter.toUpperCase();
 
       return matchesSearch && matchesStatus;
@@ -128,9 +133,10 @@ export default function OrdersPage() {
           {[
             { id: "ALL", label: "All Orders" },
             { id: "OUT_FOR_DELIVERY", label: "🚚 Out for Delivery" },
+            { id: "DELIVERED", label: "Delivered" },
+            { id: "RETURNS", label: "🔄 Returns & Refunds" },
             { id: "CONFIRMED", label: "Confirmed" },
             { id: "SHIPPED", label: "Shipped" },
-            { id: "DELIVERED", label: "Delivered" },
           ].map((f) => (
             <button
               key={f.id}

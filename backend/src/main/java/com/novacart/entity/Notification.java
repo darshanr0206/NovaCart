@@ -1,5 +1,6 @@
 package com.novacart.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
@@ -15,6 +16,7 @@ public class Notification {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
+    @JsonIgnore
     private User user;
 
     @Column(nullable = false)
@@ -22,6 +24,10 @@ public class Notification {
 
     @Column(length = 1000)
     private String message;
+
+    private String type; // ORDER, SHIPPING, DELIVERY, RETURN, REFUND, SYSTEM
+
+    private String link; // e.g. /orders/123
 
     @Builder.Default
     private boolean isRead = false;

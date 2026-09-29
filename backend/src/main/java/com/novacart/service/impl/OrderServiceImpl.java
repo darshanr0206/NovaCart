@@ -8,9 +8,12 @@ import com.novacart.entity.*;
 import com.novacart.exception.BadRequestException;
 import com.novacart.exception.ResourceNotFoundException;
 import com.novacart.repository.*;
+import com.novacart.service.CouponService;
 import com.novacart.service.EmailService;
+import com.novacart.service.NotificationService;
 import com.novacart.service.OrderService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -18,10 +21,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class OrderServiceImpl implements OrderService {
@@ -35,6 +40,8 @@ public class OrderServiceImpl implements OrderService {
     private final EmailService emailService;
     private final PaymentRepository paymentRepository;
     private final ReturnRequestRepository returnRequestRepository;
+    private final CouponService couponService;
+    private final NotificationService notificationService;
 
     private static final Set<OrderStatus> CANCELLABLE = Set.of(
             OrderStatus.PLACED, OrderStatus.CONFIRMED, OrderStatus.PROCESSING);
@@ -92,39 +99,33 @@ public class OrderServiceImpl implements OrderService {
         }
 
         BigDecimal discountAmount = BigDecimal.ZERO;
+        String appliedCouponCode = null;
         if (request.getCouponCode() != null && !request.getCouponCode().isBlank()) {
-            Coupon coupon = couponRepository.findByCodeAndActiveTrue(request.getCouponCode().trim().toUpperCase())
-                    .orElseThrow(() -> new BadRequestException("Invalid or inactive coupon: " + request.getCouponCode()));
-            if (coupon.getExpiryDate().isBefore(java.time.LocalDateTime.now())) {
+            String code = request.getCouponCode().trim().toUpperCase();
+            Coupon coupon = couponRepository.findByCodeIgnoreCase(code)
+                    .orElseThrow(() -> new BadRequestException("Invalid coupon code: " + code));
+
+            if (!coupon.isActive()) {
+                throw new BadRequestException("This coupon is no longer active");
+            }
+            if (coupon.getExpiryDate() != null && coupon.getExpiryDate().isBefore(LocalDateTime.now())) {
                 throw new BadRequestException("This coupon has expired");
             }
-            if (coupon.getMinOrderValue() != null && subtotal.compareTo(coupon.getMinOrderValue()) < 0) {
-                throw new BadRequestException("Order does not meet the minimum required amount of ₹" + coupon.getMinOrderValue());
-            }
-            if (coupon.getUsageLimit() != null && coupon.getUsageCount() != null && coupon.getUsageCount() >= coupon.getUsageLimit()) {
+            if (coupon.getUsageLimit() != null && coupon.getUsedCount() >= coupon.getUsageLimit()) {
                 throw new BadRequestException("This coupon has reached its maximum usage limit");
             }
+            if (coupon.getMinOrderValue() != null && subtotal.compareTo(coupon.getMinOrderValue()) < 0) {
+                throw new BadRequestException("Minimum order value of ₹" + coupon.getMinOrderValue() + " required for this coupon");
+            }
 
-            if (coupon.getDiscountType() == Coupon.DiscountType.FIXED) {
-                discountAmount = coupon.getFixedDiscountAmount() != null ? coupon.getFixedDiscountAmount() : BigDecimal.ZERO;
-            } else {
-                BigDecimal pct = coupon.getDiscountPercent() != null ? coupon.getDiscountPercent() : BigDecimal.ZERO;
-                discountAmount = subtotal.multiply(pct.divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP))
-                        .setScale(2, RoundingMode.HALF_UP);
-                if (coupon.getMaxDiscountAmount() != null && discountAmount.compareTo(coupon.getMaxDiscountAmount()) > 0) {
-                    discountAmount = coupon.getMaxDiscountAmount();
-                }
-            }
-            if (discountAmount.compareTo(subtotal) > 0) {
-                discountAmount = subtotal;
-            }
-            coupon.setUsageCount((coupon.getUsageCount() != null ? coupon.getUsageCount() : 0) + 1);
-            couponRepository.save(coupon);
+            discountAmount = couponService.calculateDiscount(coupon, subtotal);
+            appliedCouponCode = coupon.getCode();
+            couponService.recordCouponUsage(coupon.getCode());
         }
 
         BigDecimal deliveryCharge = subtotal.compareTo(BigDecimal.valueOf(500)) >= 0
                 ? BigDecimal.ZERO : BigDecimal.valueOf(49);
-        BigDecimal total = subtotal.add(deliveryCharge).subtract(discountAmount);
+        BigDecimal total = subtotal.add(deliveryCharge).subtract(discountAmount).max(BigDecimal.ZERO);
 
         Order order = Order.builder()
                 .orderNumber("NC" + UUID.randomUUID().toString().substring(0, 10).toUpperCase())
@@ -135,7 +136,7 @@ public class OrderServiceImpl implements OrderService {
                 .deliveryCharge(deliveryCharge)
                 .discount(discountAmount)
                 .total(total)
-                .couponCode(request.getCouponCode())
+                .couponCode(appliedCouponCode)
                 .items(orderItems)
                 .build();
 
@@ -158,6 +159,15 @@ public class OrderServiceImpl implements OrderService {
         // Empty the cart now that the order has been placed.
         cart.getItems().clear();
         cartRepository.save(cart);
+
+        // Customer notification for Order Placed
+        notificationService.sendNotification(
+                user,
+                "Order Placed Successfully",
+                "Your order #" + savedOrder.getOrderNumber() + " for ₹" + savedOrder.getTotal() + " has been placed.",
+                "ORDER",
+                "/orders/" + savedOrder.getId()
+        );
 
         emailService.sendOrderConfirmationEmail(user.getEmail(), savedOrder.getOrderNumber());
 
@@ -225,6 +235,9 @@ public class OrderServiceImpl implements OrderService {
         if (cancelPayment != null) {
             if (cancelPayment.getStatus() == PaymentStatus.SUCCESS) {
                 cancelPayment.setStatus(PaymentStatus.REFUNDED);
+                cancelPayment.setRefundStatus("COMPLETED");
+                cancelPayment.setRefundAmount(order.getTotal());
+                cancelPayment.setRefundedAt(LocalDateTime.now());
             } else if (cancelPayment.getStatus() == PaymentStatus.PENDING) {
                 cancelPayment.setStatus(PaymentStatus.FAILED);
             }
@@ -240,6 +253,16 @@ public class OrderServiceImpl implements OrderService {
             item.setItemStatus(OrderStatus.CANCELLED);
         }
         orderRepository.save(order);
+
+        // Send notification
+        notificationService.sendNotification(
+                user,
+                "Order Cancelled",
+                "Your order #" + order.getOrderNumber() + " has been cancelled.",
+                "ORDER",
+                "/orders/" + order.getId()
+        );
+
         return toResponse(order);
     }
 
@@ -272,6 +295,9 @@ public class OrderServiceImpl implements OrderService {
             if (payment != null) {
                 if (payment.getStatus() == PaymentStatus.SUCCESS) {
                     payment.setStatus(PaymentStatus.REFUNDED);
+                    payment.setRefundStatus("COMPLETED");
+                    payment.setRefundAmount(order.getTotal());
+                    payment.setRefundedAt(LocalDateTime.now());
                 } else if (payment.getStatus() == PaymentStatus.PENDING) {
                     payment.setStatus(PaymentStatus.FAILED);
                 }
@@ -280,6 +306,44 @@ public class OrderServiceImpl implements OrderService {
         }
 
         orderRepository.save(order);
+
+        // Send notifications based on order/shipping status
+        User customer = order.getUser();
+        if (customer != null) {
+            String title = "Order Status Update";
+            String msg = "Your order #" + order.getOrderNumber() + " status is now " + status.name().replace("_", " ") + ".";
+            String notifType = "ORDER";
+
+            if (status == OrderStatus.CONFIRMED) {
+                title = "Order Confirmed";
+                msg = "Your order #" + order.getOrderNumber() + " has been confirmed and is being processed.";
+            } else if (status == OrderStatus.PROCESSING) {
+                title = "Order Processing";
+                msg = "Your order #" + order.getOrderNumber() + " is currently being prepared for dispatch.";
+            } else if (status == OrderStatus.PACKED) {
+                title = "Order Packed";
+                msg = "Your items for order #" + order.getOrderNumber() + " have been packed and ready for courier pickup.";
+                notifType = "SHIPPING";
+            } else if (status == OrderStatus.SHIPPED) {
+                title = "Order Shipped";
+                msg = "Your order #" + order.getOrderNumber() + " has been shipped and is on its way.";
+                notifType = "SHIPPING";
+            } else if (status == OrderStatus.OUT_FOR_DELIVERY) {
+                title = "Out for Delivery";
+                msg = "Great news! Your order #" + order.getOrderNumber() + " is out for delivery today.";
+                notifType = "DELIVERY";
+            } else if (status == OrderStatus.DELIVERED) {
+                title = "Order Delivered";
+                msg = "Your order #" + order.getOrderNumber() + " has been successfully delivered. Thank you for shopping with NovaCart!";
+                notifType = "DELIVERY";
+            } else if (status == OrderStatus.CANCELLED) {
+                title = "Order Cancelled";
+                msg = "Your order #" + order.getOrderNumber() + " has been cancelled.";
+            }
+
+            notificationService.sendNotification(customer, title, msg, notifType, "/orders/" + order.getId());
+        }
+
         emailService.sendShippingUpdateEmail(order.getUser().getEmail(), order.getOrderNumber(), status.name());
         return toResponse(order);
     }
@@ -318,6 +382,10 @@ public class OrderServiceImpl implements OrderService {
                     .id(p.getId())
                     .razorpayOrderId(p.getRazorpayOrderId())
                     .razorpayPaymentId(p.getRazorpayPaymentId())
+                    .razorpayRefundId(p.getRazorpayRefundId())
+                    .refundStatus(p.getRefundStatus())
+                    .refundAmount(p.getRefundAmount())
+                    .refundedAt(p.getRefundedAt() != null ? p.getRefundedAt().toString() : null)
                     .paymentMethod(p.getPaymentMethod())
                     .screenshotUrl(p.getScreenshotUrl())
                     .amount(p.getAmount())
@@ -359,11 +427,17 @@ public class OrderServiceImpl implements OrderService {
                         .customer(order.getUser() != null ? order.getUser().getFullName() : "Customer")
                         .customerEmail(order.getUser() != null ? order.getUser().getEmail() : "")
                         .product(productTitle)
-                        .amount(order.getTotal())
+                        .amount(rr.getRefundAmount() != null ? rr.getRefundAmount() : order.getTotal())
                         .reason(rr.getReason())
                         .note(rr.getNote())
                         .adminComment(rr.getAdminComment())
                         .status(rr.getStatus())
+                        .refundStatus(rr.getRefundStatus())
+                        .refundAmount(rr.getRefundAmount() != null ? rr.getRefundAmount() : order.getTotal())
+                        .refundTransactionId(rr.getRefundTransactionId())
+                        .refundPaymentMethod(rr.getRefundPaymentMethod() != null ? rr.getRefundPaymentMethod() : paymentMethod)
+                        .refundedAt(rr.getRefundedAt() != null ? rr.getRefundedAt().toString() : null)
+                        .paymentMethod(paymentMethod)
                         .createdAt(rr.getCreatedAt() != null ? rr.getCreatedAt().toString() : null)
                         .updatedAt(rr.getUpdatedAt() != null ? rr.getUpdatedAt().toString() : null)
                         .build();

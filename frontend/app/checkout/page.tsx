@@ -17,7 +17,12 @@ import {
 import { formatINR } from "@/lib/utils";
 import { getApiErrorMessage } from "@/lib/api";
 import { Address } from "@/types";
-import { validateCoupon, CouponValidateResult } from "@/services/coupon-service";
+import {
+  getActiveCoupons,
+  validateCoupon,
+  CouponResponse,
+  CouponValidateResponse
+} from "@/services/coupon-service";
 import { toast } from "sonner";
 import Link from "next/link";
 import {
@@ -32,7 +37,6 @@ import {
   Building,
   QrCode,
   Zap,
-  Tag,
   AlertCircle,
   HelpCircle,
   RotateCcw,
@@ -47,6 +51,8 @@ import {
   Info,
   MapPin,
   FlaskConical,
+  Tag,
+  Ticket,
 } from "lucide-react";
 import {
   GooglePayLogo,
@@ -116,41 +122,46 @@ export default function CheckoutPage() {
   const [giftCardCode, setGiftCardCode] = useState("");
   const [giftCardPin, setGiftCardPin] = useState("");
 
-  // Coupon state
+  // Coupon Promotion states
   const [couponInput, setCouponInput] = useState("");
-  const [appliedCoupon, setAppliedCoupon] = useState<CouponValidateResult | null>(null);
+  const [appliedCoupon, setAppliedCoupon] = useState<CouponValidateResponse | null>(null);
   const [validatingCoupon, setValidatingCoupon] = useState(false);
+  const [availableCoupons, setAvailableCoupons] = useState<CouponResponse[]>([]);
 
-  async function handleApplyCoupon() {
-    if (!couponInput.trim()) {
+  const handleApplyCoupon = async (codeToApply?: string) => {
+    const code = (codeToApply || couponInput).trim().toUpperCase();
+    if (!code) {
       toast.error("Please enter a coupon code");
       return;
     }
-    if (!cart?.total) {
-      toast.error("Cart is empty");
+    if (!cart) {
+      toast.error("Cart is empty or not loaded yet");
       return;
     }
     setValidatingCoupon(true);
     try {
-      const res = await validateCoupon(couponInput.trim(), cart.total);
+      const res = await validateCoupon(code, cart.total);
       if (res.valid) {
         setAppliedCoupon(res);
-        toast.success(res.message || "Coupon applied successfully!");
+        setCouponInput(code);
+        setActiveOrder(null);
+        toast.success(res.message || `Coupon ${code} applied successfully!`);
       } else {
-        toast.error(res.message || "Invalid coupon");
+        toast.error(res.message || "Invalid coupon code");
       }
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || "Invalid coupon code");
+      toast.error(getApiErrorMessage(err, "Failed to validate coupon"));
     } finally {
       setValidatingCoupon(false);
     }
-  }
+  };
 
-  function handleRemoveCoupon() {
+  const handleRemoveCoupon = () => {
     setAppliedCoupon(null);
     setCouponInput("");
+    setActiveOrder(null);
     toast.info("Coupon removed");
-  }
+  };
 
   // Countdown timer
   useEffect(() => {
@@ -215,7 +226,15 @@ export default function CheckoutPage() {
           setShowAddressPicker(true);
         }
       } catch (err) {
-        console.error("Failed loading saved addresses:", err);
+        console.warn("Could not load addresses:", err);
+      }
+
+      // 3. Load active promotions/coupons for quick apply
+      try {
+        const coupons = await getActiveCoupons();
+        setAvailableCoupons(coupons);
+      } catch (err) {
+        console.warn("Could not fetch active coupons:", err);
       }
     };
 
@@ -398,7 +417,7 @@ export default function CheckoutPage() {
     if (selectedMethod === "COD") {
       setPlacing(true);
       try {
-        const order = await createOrder(selectedAddressId, appliedCoupon?.code || undefined, "COD");
+        const order = await createOrder(selectedAddressId, appliedCoupon?.code, "COD");
         clearCart();
         toast.success("Order placed with Cash on Delivery! 📦");
         router.push(`/orders/${order.id}`);
@@ -418,7 +437,7 @@ export default function CheckoutPage() {
     try {
       let order = activeOrder;
       if (!order) {
-        order = await createOrder(selectedAddressId, appliedCoupon?.code || undefined, "RAZORPAY");
+        order = await createOrder(selectedAddressId, appliedCoupon?.code, "RAZORPAY");
         setActiveOrder(order);
       }
 
@@ -556,10 +575,11 @@ export default function CheckoutPage() {
   }
 
   // Calculations for Price Summary
-  const couponDiscount = appliedCoupon ? appliedCoupon.discountAmount : 0;
-  const totalAmount = Math.max(0, cart.total - couponDiscount);
-  const estimatedMrp = Math.round(cart.total * 1.142);
-  const discountAmount = estimatedMrp - cart.total;
+  const baseCartTotal = cart.total;
+  const couponDiscount = appliedCoupon?.discountAmount || 0;
+  const totalAmount = Math.max(0, baseCartTotal - couponDiscount);
+  const estimatedMrp = Math.round(baseCartTotal * 1.142);
+  const discountAmount = estimatedMrp - baseCartTotal;
 
   // Selected Address Details
   const activeAddr = addresses.find((a) => a.id === selectedAddressId) || addresses[0];
@@ -998,47 +1018,87 @@ export default function CheckoutPage() {
 
             {/* ── COLUMN 3: PRICE DETAILS SIDEBAR (lg:col-span-3) ── */}
             <div className="lg:col-span-3 space-y-3">
-              {/* Coupon / Promo Code Card */}
-              <div className="bg-white rounded-xl border border-slate-200/90 p-4 shadow-2xs space-y-2.5">
-                <div className="flex items-center gap-2 text-slate-800 text-xs font-bold">
-                  <Tag className="h-4 w-4 text-blue-600" />
-                  <span>Coupons & Offers</span>
-                </div>
-                {appliedCoupon ? (
-                  <div className="flex items-center justify-between p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs">
-                    <div>
-                      <span className="font-mono font-bold text-emerald-800 tracking-wider">
-                        {appliedCoupon.code}
-                      </span>
-                      <span className="text-emerald-700 block text-[11px]">
-                        Saved ₹{appliedCoupon.discountAmount.toLocaleString("en-IN")}
-                      </span>
-                    </div>
+              {/* Promo & Coupon Code Card */}
+              <div className="bg-white rounded-xl border border-slate-200/90 p-4 shadow-2xs space-y-3 text-xs">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 font-bold text-slate-800">
+                    <Tag className="h-4 w-4 text-nova-600" />
+                    <span>Apply Coupon</span>
+                  </div>
+                  {appliedCoupon && (
                     <button
                       type="button"
                       onClick={handleRemoveCoupon}
-                      className="text-xs text-rose-600 hover:text-rose-800 font-bold uppercase tracking-wider"
+                      className="text-[11px] font-semibold text-rose-600 hover:text-rose-700 hover:underline"
                     >
                       Remove
                     </button>
-                  </div>
-                ) : (
-                  <div className="flex gap-1.5">
+                  )}
+                </div>
+
+                {!appliedCoupon ? (
+                  <div className="flex gap-2">
                     <input
                       type="text"
-                      placeholder="ENTER COUPON"
+                      placeholder="Enter promo code"
                       value={couponInput}
                       onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
-                      className="flex-1 uppercase font-mono text-xs rounded-lg border border-slate-300 px-2.5 py-1.5 bg-slate-50 focus:bg-white tracking-wider"
+                      onKeyDown={(e) => e.key === "Enter" && handleApplyCoupon()}
+                      className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-xs font-mono font-bold uppercase focus:border-nova-600 focus:outline-hidden"
                     />
                     <button
                       type="button"
-                      onClick={handleApplyCoupon}
-                      disabled={validatingCoupon}
-                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition disabled:opacity-50 shrink-0"
+                      onClick={() => handleApplyCoupon()}
+                      disabled={validatingCoupon || !couponInput.trim()}
+                      className="btn-primary text-xs !py-1.5 !px-3 shrink-0 disabled:opacity-50"
                     >
-                      {validatingCoupon ? "…" : "Apply"}
+                      {validatingCoupon ? (
+                        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        "Apply"
+                      )}
                     </button>
+                  </div>
+                ) : (
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-2.5 flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-1.5 font-mono font-bold text-emerald-800 text-xs">
+                        <Check className="h-3.5 w-3.5 text-emerald-600" />
+                        <span>{appliedCoupon.code} Applied</span>
+                      </div>
+                      <p className="text-[11px] text-emerald-700 mt-0.5">
+                        Saving {formatINR(appliedCoupon.discountAmount || 0)} on this order
+                      </p>
+                    </div>
+                    <span className="text-xs font-bold text-emerald-700 bg-white px-2 py-0.5 rounded border border-emerald-200">
+                      -{formatINR(appliedCoupon.discountAmount || 0)}
+                    </span>
+                  </div>
+                )}
+
+                {/* Available Coupons Quick-Chips */}
+                {availableCoupons && availableCoupons.length > 0 && !appliedCoupon && (
+                  <div className="pt-2 border-t border-slate-100 space-y-1.5">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                      Available Offers:
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {availableCoupons.slice(0, 3).map((ac) => (
+                        <button
+                          key={ac.id}
+                          type="button"
+                          onClick={() => handleApplyCoupon(ac.code)}
+                          className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 rounded-lg px-2 py-1 text-[11px] font-mono font-bold flex items-center gap-1 transition"
+                          title={`Click to apply ${ac.code}`}
+                        >
+                          <Ticket className="h-3 w-3" />
+                          <span>{ac.code}</span>
+                          <span className="font-sans text-[10px] text-indigo-600 font-normal">
+                            ({ac.discountType === "PERCENTAGE" ? `${ac.discountValue}%` : `₹${ac.discountValue}`})
+                          </span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -1069,9 +1129,9 @@ export default function CheckoutPage() {
                         <span className="font-bold">-₹{discountAmount.toLocaleString("en-IN")}</span>
                       </div>
                       {appliedCoupon && (
-                        <div className="flex justify-between items-center text-emerald-600 font-semibold">
+                        <div className="flex justify-between items-center text-emerald-600 font-bold">
                           <span>Coupon ({appliedCoupon.code})</span>
-                          <span>-₹{appliedCoupon.discountAmount.toLocaleString("en-IN")}</span>
+                          <span>-₹{(appliedCoupon.discountAmount || 0).toLocaleString("en-IN")}</span>
                         </div>
                       )}
                     </div>
